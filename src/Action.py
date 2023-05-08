@@ -30,16 +30,17 @@ class Action:
     }
     
 
-    #shemas that use this action
-    schemas = []
+   
 
-    '''Constructor'''
     def __init__(self, stage, name, index, type = Type.HAND1_GRASP):
+        #when the schema is activated
         self.last_activated_at = -1000
         self.stage = stage
-        self. index = index
+        self.index = index
         self.type = type
         self.controller = ActionController(self)
+        #shemas that use this action
+        self.schemas = []
 
 
 
@@ -49,14 +50,20 @@ class Action:
     #FIX STAGE
     def activate(self, val):
         if val:
-            self.last_activated_at = stage.clock
+            self.last_activated_at = self.stage.clock
 
-    '''
-    Turn action to the string
-    '''
-    #turn this later into HTMl to add the visualization
-    # def toHTML(self):
-    #work with streams and create Action into the link
+    # 
+    def __str__(self):
+        print("Action ", self.index, ": ", self.name, " ", self.type )
+        print("activated ", self.activated)
+        print("Schemas containing this action: ")
+        for schema in self.stage.schemas:
+            if schema.action == self:
+                print(schema.__str__())
+            
+
+   
+
 
 
    

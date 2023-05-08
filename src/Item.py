@@ -4,6 +4,7 @@ represented by an item
 '''
 
 class Item:
+    #implement ENUM in python
     ItemType = {
         'PRIMITIVE':'PRIMITIVE', 'SYNTHETIC':'SYNTHETIC', 'CONTEXT_CONJUNCTION':'CONTEXT_CONJUNCTION'
     }
@@ -37,6 +38,33 @@ class Item:
     def set_value(self,v):
         self.value =v
 
-    #ADD A FUCNCTION TO TURN INTO HTML and to string
 
-   
+    '''
+    // If non-null, we are the synthetic item for this host schema
+    Schema hostSchema;'''
+
+    def __str__():
+        val = ''
+        lname = self.name
+        if self.type == ItemType.SYNTHETIC:
+            if host_schema:
+                lname = "S-" + str(host_schema.id) + "_" + str(hostSchema.action.type)
+
+            if known_state:
+                val += str(self.value)
+
+            else:
+                val += "unknown"
+
+        else:
+            val += str(self.value)
+
+        return "Item-"+str(self.id)+" "+str(self.type)+" "+lname
+
+
+
+
+
+
+
+
