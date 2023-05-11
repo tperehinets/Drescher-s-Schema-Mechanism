@@ -1,0 +1,746 @@
+
+sbt
+run
+
+There are two world Planes - front and back
+
++ world needs background spatial markers for navigation
+
+
+What is the API to the sensorimotor system? 
+
+Models:
+  blocks with friction, density, texture
+
+   server can implementat 'sticky' blocks
+
+
+
+Motor output:
+
+System has two arms. Each has two joints and a hand:
+
+  Gross motor action: upper arm, moves to a quadrant of screen, say 1/10 quantized
+
+  Fine motor action: lower arm, moves 1/10 of quadrant
+
+  Rotator Joints at the shoulder and elbow, i.e., there is redundancy for reaching a point but that
+  allows for better reuse of relative motion schemas
+
+  Gross and fine joints have control over force left,right, up/down
+
+  "Lift" pulls a block out of the plane so it can be moved over other blocks.
+
+  - The motor system provides both force and a targeted 'move to proprioceptive position' function. E.g., 
+  we've got a fairly high level motor system.
+
+  hand: grasp, ungrasp, rotate left, rotate right
+    grasp and rotate force is controllable over some range
+     -- the 'grasp' operation gives a force feedback of "grip" when there is an object touching, with force sensation
+        proportional to the gripping force, like when you squeeze a block with you fingers.
+
+
+    HEAD: rotatation , translation
+
+    Gaze: 10x10 gross angle quantization
+    	  10x10 fine angle position
+
+Also see Vision system, there is 'motor control' of internal pipeline vision filters, you can
+choose which ones go into pipeline
+
+Vocal: phoneme output
+
+Sensor inputs:
+
+  Proprioception: 
+     10x10 location for gross motor system - divided into x,y axis? 
+     10x10 location for fine motor system 
+     shoulder and elbow joint position
+
+Force/touch
+
+     force on shoulder joint, x, y, rotation
+
+     force on elbox x,y,rotation
+
+     force on wrist join rotation, x, y 
+
+     force on grasp
+
+     touch on fingers, texture, temperature, heat conductivity, on fingers. 
+
+     
+
+encoding of magnitudes; should we encode as V>n ? 
+
+v= 6
+
+n = >1 >2 >3 >4 >5 >6 >7 >8 >9 >10
+
+    1  1  1  1  1  1  0  0  0  0
+
+
+
+
+Vision
+
+  modules:
+
+  broad-area vision - blob detection per quadrant, a couple of bits of color/grayscale
+
+  fovea operations:
+
+     closed area fill - is area at fovea closed? 
+     are there any bits on at the fovea ; color, density, texture (image morphology bank of filters)
+
+
+     edge detection -- vertical edges, horizontal edges, diagonal edges (in 30 degree increments
+
+  filter system (image morphology)
+    prescale
+    erode/dilate
+        
+
+   motion tracking; attention focus points on fovea and broad-area peripheral vision  when motion is sensed
+     you can enable tracking as an action on the fovea; you then get the gaze moved around for you as it tracks an object
+     that is visible.
+
+
+     Motor action: focus eye on object center of mass. Send hand to gaze position? 
+
+     +      Motion map: at each timestep, compute which objects are moving, light up sensors in a motion quadrant map.
+
+     +      Motion at fovea - has more directional info, velocity. 
+
+     When the head moves, mark all quadrants which have objects as in motion? Or is that something that
+     we should handle in the vision system, and factor out by the time it reaches schema mechanism? What can you
+     learn from moving head and seeing an object motion vector opposite direction? I see the value of understanding
+     its final location, i.e., it's static position visual sensor, but what value is the momentary motion illusion?
+
+     
+
+   trajectory - when motion detected, a motion vector input is stimulated
+
+
+   Foveation: vision system will pull focus of attention to nearest object, and give a proprioceptive
+   sensation of moving the gaze by dx,dy.  Vision hardware can be asked to cycle to nearest objects, in one
+   of four directions; left,right,top,bottom. You get sensation of how far the gaze moved to get to next object.
+   That way you can trace out the location of several nearby objects, and get a sensation of how they are 
+   relatively positioned.
+
+
+
+Audio
+
+  Basic frequency burst (pop, click, boom), localization from auditory system to a quadrant
+  Phoneme inputs
+
+
+
+================================================================
+
+How is sensorimotor info passed to schema engine? 
+
+class SensoryInput {
+      int id; // a unique id for this input
+      boolean value;
+      boolean changed;
+}
+
+class MotorAction {
+      int id; // unique id for this output
+      boolean value;
+}
+
+class WorldState {
+
+    HashMap<String,SensorInput> inputList = new HashMap<String,SensorInput>();
+    
+    HashMap<String,MotorAction> outputList = new HashMap<String,MotorAction>();
+
+
+}
+
+
+
+
+
+
+
+================
+Questions:
+
+How do infants learn to keep still? I.e., it's important to only be moving a few things at time, initially.
+So you need to keep most of the body still. And for fine motor activity need to keep the gross motor joints still.
+
+How much of that is built in? You need to set the opposing muscles at
+exactly the same force to maintain constant proprioceptive input. In
+terms of schema, what are the interesting schemas being learned there,
+to maintain that invariant input? Why is it interesting to the Schema mechanism to learn
+to keep limbs still by default?  Or to keep head aligned with an object to keep it centered in fovea? 
+
+
+call David McDonald about language
+
+
+================================================================
+export CLASSPATH=lib/controlP5.jar:lib/core.jar:lib/gluegen-rt.jar:lib/jbox2d_2.1.2_ds_v2.jar:lib/jogl-all.jar:lib/jruby-complete-1.7.4.jar:lib/pbox2d.jar:lib/trove4j-3.0.3.jar:lib/typesafe-config.jar:target/scala-2.10/jschema_2.10-1.1.jar:lib/log4j.jar
+
+jirb 
+
+
+
+
+Web API
+
+http://127.0.0.1:8080/
+http://127.0.0.1:8080/items/map
+http://127.0.0.1:8080/raw/map
+
+
+
+
+================================================================
+Main loop - select an action, perform it once, wait n cycles to
+attribute effects to it.
+
+Need to remember last action activated, but only activate it once.
+
++ Need to bias the gaze to stay centered where the head is.
+
++ add grasp reflex: = when hand touched, grasp it
+ -- preinitialize schema for this ?
+
++ Do some whole areas of the brain go idle when doing learning, so you might be biased towards just learning
+associations between motion and touch, or touch and vision? So that not too many are active at once
+to swamp the learning mechanism? 
+
++ Embellishment - when spinning off new (result) schema B from parent A, add B's synthetic item to the item ignore list
+of A. Because any child schema's synthetic item will always be correlated to parent activation.
+
+>>>>Check if Drescher already covered this case with suppress/override heuristic ...
+
+    Hi Henry. Yes, I think that should be suppressed. Also, no synthetic
+    item should be defined for a schema with an empty result (a synthetic
+    item reifies the validity conditions of a schema, and a schema with an
+    empty result has no validity conditions).
+
+    For a schema with a nonempty result, it shouldn't be possible that the
+    schema's own synthetic item is discovered to be a result of that
+    schema's activation. At most, that schema's activation should
+    transition the schema's synthetic item from Unknown to On, not from
+    Off to On; and the former transition does not count for the
+    extended-result correlation statistics. (If activating a schema were
+    to turn its own synthetic item On--which is to say, if activating the
+    schema were to achieve the schema's validity conditions--then the
+    schema would always be valid, in which case its own synthetic item
+    should always be On, rather than being designated as a result of the
+    schema.)
+
++ Check what are the exact conditions under which a schema's synthetic item goes to what state? 
+
++ "My implementation used an ad hoc method that was tied to its
+space-limited statistics collection method. But the real way to do it
+is to use a threshold of statistical significance. So just pre-compute
+a lookup table that says what the minimum correlation is that can be
+supported by a given sample size.
+"
+
++ I'm getting positive feedback in selection/creation; I pick a schema at random to execute,
+but if they are based on HAND_UP, then they spin off some HAND_UP schemas, so the random selection
+is biased towards moving hand up.
+
++ How does a touch-grasp  reflex work? Is there a schema for it? it operates outside of schema mechanism,
+as an instructor? 
+
++ How do I implement this (4.1.2) "These statistics are tabulated over
+a number of trials in which the action is tak- en, and a number of
+trials in which it is not; the more trials there have been, and the
+more discrepancy there is between the two probabilities, the sooner
+the machinery will detect the difference (see section 5.2.2). The
+sampling is weighted toward the most recent trials."
+
+
++ When a parent spins off a child result schema for an item, do you reset that item's counters to zero in the parent schema 
+extended result? 
+
+sudo apt-get install xvfb
+Xvfb :2 -screen 0 1024x768x24 &
+export DISPLAY=localhost:2.0
+java -jar jschema-assembly-1.1.jar
+
+
+
++ make items record timestamp of last transitions. in realtime world we need this to span intervals of time
+in the simulation. 
+
++ motor actions - should be "turn on" "turn off" so you can "sweep arm right" which will continue until
+you "stop arm. 
+
+How should these be represented/implemented? Do we have unit motion "move left one" as an atomic action, 
+or do we have "start moving left" and "stop moving" ? 
+If you have 'start moving' and 'stop moving', how do you learn to move small unit amounts? 
+
+
+++ When gaze moves, need to damp out visual deltas (item transitions) for a frame?
+Which items need to damp if any?
+
+
++ Q: When a schema predicts a result item, is it predicting that the item will be on (or off) or
+is it predicting that the item will transition from off->on? 
+Is there a different kind of schema for predicting a transition vs. predicting what the final state of the
+item is? 
+A: A schema which says  ~LIGHT-ON/ FLIP_SWITCH/LIGHT-ON predicts a transition of the value
+
++ refactor marginal attribution to loop over all items in outer loop, 
+and only update on changing items.
+
++ sort SensorItems by transition time, then the copysms loop only has to look back as far as the last action time.
+Use TreeSet
+
+java_import "com.beartronics.jschema.WorldState"
+w = WorldState.new
+i = w.inputsByTransitionTime
+
+w.setClock(20)
+s1 = w.setSensorInput("foo", 0, false)
+w.setSensorInput("foo", 0, true)
+w.setClock(30)
+s2 = w.setSensorInput("bar", 1, false)
+w.setSensorInput("bar", 1, true)
+w.setClock(40)
+s3 = w.setSensorInput("baz", 2, false)
+w.setSensorInput("baz", 2, true)
+w.setClock(50)
+w.setSensorInput("foo", 0, false)
+
+
+
+
+
++ Action cycle should be that an action is taken, then system waits for input transitions to
+settle down, with some max time to wait for things to quiesce, then does learning step.
+
+
+
++ Should we restrict spinoffs from schemas tht have no context items? 
+
+Or do schemas with no context (only results) not get synthetic items? Because they're not
+potentially useful enough for that? 
+
++ do we need a pool of schemas, from which new ones are pulled, and when full, old ones
+are recycled? 
+
+
++ need to get action selection to repeat recently successful spun off schemas? 
+
+Gson gson = new GsonBuilder()
+.excludeFieldsWithModifier(Modifier.STATIC)	
+.enableComplexMapKeySerialization()
+.serializeNulls()
+.setFieldNamingPolicy(FieldNamingPolicy.UPPER_CAMEL_CASE)
+.setPrettyPrinting()
+.setVersion(1.0)
+.create();
+
+
+gson = GsonBuilder.new().excludeFieldsWithModifier(Modifier.STATIC) .enableComplexMapKeySerialization() .serializeNulls() .setFieldNamingPolicy(FieldNamingPolicy.UPPER_CAMEL_CASE) .setPrettyPrinting() .setVersion(1.0) .create()
+
+gson = GsonBuilder.new().excludeFieldsWithModifier(Modifier.STATIC).create()
+
+
+import java.lang.reflect.Modifier;
+
+Gson gson = new GsonBuilder()
+    .excludeFieldsWithModifier(Modifier.STATIC)
+    .create();
+
+http://stackoverflow.com/questions/4231092/gson-illegalstateexception
+
+use Trove HashMap (hashset?) implementation
+
+================
+
+implement context spinoff
+
+if you have 
+
+p/a/x
+
+and there is an xy/b/z someplace , and the marginal attribution for p/a/x 
+notices that
+
+p/a/x  { xy is correlated }
+
+do you then spin off 
+
+p/a/xy ? 
+
++ What if:
+
+  you have p/a/x, and its extended result sees that the "ghi" of some other schema ghi/b/z is correlated?
+
+  Does that spin off p/a/ghi ? Is there some info we're losing about the result x? 
+
+
+Does a 'transition' of a conjunct 'xy' or 'ghi' mean that they all transition from off to at the same time ? 
+
+
+
++ Should the simpler schemas (less context and result items) have a higher number of trials threshold before
+they spin off, on the assumption that they are noisier? 
+
+================================================================
+
+
+Need to get adjacency map case working -- start with 1-d hand motion.
+
+Is there any advantage to the approach of keeping proprioceptive X and Y separate, vs a single hand@x,y sensory input? 
+
+
+- make grossx, finex be zero based, no negative values, too confusing to read
+
+================================================================
+
+When you spin off a new schema (in particular a new schema with a
+context item), what if any parts of the extended context and result do
+you copy to the new child schema, and what entries in the extended
+context and extended result if any do you reset in the parent schema?
+
+
+================
+Make a JSON config file for all params so they are in one place!
+
+================
+
+Seems to be bug with move hand logging effect of hand position two units away
+
+Add debug logging to extended-result ,to show what input delta we're
+tallying. Check if we're getting correct results 
+
+- then move to extended result, log what preconditions we're tallying. 
+
+Q: When you spin off a new schema with a new context item, do you clear the parent schema's extended result?
+
+Q: When you spin off a new schema with a result item, do you clear just that result counter from the parent's
+extended result, or do you clear all extended results?
+
+#####
+Is the criteria for "succeeded" if the result is found in the predicted state, or it *transitions* to the predicted state?
+I.e., is the result for a schema a prediction of value (regardless of whether the value was already in that state) or of a transition? 
+
+
+
+================================================================
+	p. 76
+    Suppose, in the example just discussed, that
+    the context-relevance of d to schema /a/x is not obscured; the schema' s extended
+    context discovers this relevance, leading to the construction of the schema d/a/x.
+    The extended-context slot for d in /a/x records that a schema has been spun off
+    from that schema for that (positively included) item. The following embellishment
+    then occurs:
+
+    • All correlation data in all extended context slots of the schema /a/x are reset
+    to zero.
+
+    • Subsequently, whenever /a/x is activated and d is On, the updating of all extended
+    context data for that trial of /a/x is suppressed. The effect of this embellishment
+    is that the extended context of /a/x now maintains correlation
+    data only for trials for which d is not On (resetting the data erases correlations
+    that had been tabulated without this condition). Thus, when d is on,
+    attribution is deferred from /a/x to the more specific applicable schema d/a/x.
+     That schema, of course, can update its own extended context data for the
+    trial, leading to the eventual construction of def/a/x.
+
++ does result spin off reset all counters?? 
+  how do we inhibit redundant result spinoff? 
+
+ -- talk to Gary 
+
++ TODO p 85 child schema reports its applicability to the parent, which can turn on it's synthetic item.
+also if an ovveride conditions obtains in the child, it can turn off the parent's synthetic item
+
+
+
+================================================================
++ When we build conjunct items (for use as targets for result) do we need to make sure not to use them
+as context items for other schemas? Because a conjunct item would be redundant with the schema context list that created it?
+
++ be careful to update the conjunct item values exactly:  lastPosTransition, lastNegTransition, value, prevValue
+all need to be set properly for taking of both context and result statistics.
+
++ Build conjunct items instead of conjunct lists  -- easier to deal with
+
++ use X,Y proprioceptive items, and visual items, instead of discrete separate x and y items
+
+
+================
+When spinoff happens, log everything, put in string in schema for easy access, se we see counter values
+
+-- look up override conditions, how are those represented in parent?
+- remember override conditons when doing planning
+
+
+
+================================================================
+
+
+(a + b)! (c + d)! (a+c)! (b+d)!
+_________________________________
+       a! b! c! d! n!
+
+
+             no-action  action
+
+transition     a          b
+
+no-transition  c          d  
+18 Item-18 #18:hand1.gross.(-2,-1)   ^ NaN [A: 2.00/192, !A: 7.00/5268],  v NaN [A: 3.00/192, !A: 6.00/5268]
+
+a positiveTransitionsNA = 7
+b positiveTransitionsA = 2
+c numTrialsActionNotTaken 5268
+d numTrialsActionTaken, = 192
+
+
+   -3 -2 -1  0 
+
+-3  .  O  .  .
+
+-2  x  .  .  .
+
+-1  .  .  .  .
+
+~[]/[Action-1 HAND1_RIGHT]/Item-14 PRIMITIVE #14:hand1.gross.(-2,-3):~null]
+
+sense=false:= 2>Item-2 #2:hand1.gross.(-3,-2)  </a> On 0.000000 [Succ.: <b>0</b>, Fail: <b>5</b>],  Off 0.285714 [Succ.: <b>2</b>, Fail: <b>7</b>] 1/0 0.000000 0/1 Infinity <b></b> <b></b>
+
+
+
+
+
+
+saveStage() and loadStage() methods
+
+
+================================================================
+1.9.3-p484 :002 > Exception in thread "Animation Thread" java.lang.Error: spinning off OFF context item [Schema 13 []:~[]/[Action-1 HAND1_RIGHT]/null:~Item-10 PRIMITIVE #10:hand1.gross.(0,1)]
+
+
+	   	  	       	      ITEM was	ON/suc	ON/fail 	  OFF/suc      OFF/fail	   
+0 Item-0 #0:hand1.gross.(-1,-1)	      On NaN	0	0	Off 0.90	18	2	 1/0 NaN	 0/1 NaN
+1 Item-1 #1:hand2.gross.(-1,-1)	      On NaN	0	0	Off 0.90	18	2	 1/0 NaN	 0/1 NaN
+2 Item-2 #2:hand1.gross.(-1,0)	      On 1.00	1	0	Off 0.89	17	2	 1/0 1.117647	 0/1 0.894737
+3 Item-3 #3:hand2.gross.(-1,0)	      On NaN	0	0	Off 0.90	18	2	 1/0 NaN	 0/1 NaN
+4 Item-4 #4:hand1.gross.(-1,1)	      On 0.00	0	2	Off 1.00	18	0	 1/0 0.000000	 0/1 Infinity
+5 Item-5 #5:hand2.gross.(-1,1)	      On NaN	0	0	Off 0.89	17	2	 1/0 NaN	 0/1 NaN
+6 Item-6 #6:hand1.gross.(0,-1)	      On 1.00	1	0	Off 0.89	16	2	 1/0 1.125000	 0/1 0.888889
+7 Item-7 #7:hand2.gross.(0,-1)	      On NaN	0	0	Off 0.89	17	2	 1/0 NaN	 0/1 NaN
+8 Item-8 #8:hand1.gross.(0,0)	      On 1.00	1	0	Off 0.89	16	2	 1/0 1.125000	 0/1 0.888889
+9 Item-9 #9:hand2.gross.(0,0)	      On NaN	0	0	Off 0.89	17	2	 1/0 NaN	 0/1 NaN
+10 Item-10 #10:hand1.gross.(0,1)      On 1.00	5	0	Off 0.86	12	2	 1/0 1.166667	 0/1 0.857143
+11 Item-11 #11:hand2.gross.(0,1)      On NaN	0	0	Off 0.89	17	2	 1/0 NaN	 0/1 NaN
+12 Item-12 #12:hand1.gross.(1,-1)     On 1.00	2	0	Off 0.88	15	2	 1/0 1.133333	 0/1 0.882353
+13 Item-13 #13:hand2.gross.(1,-1)     On NaN	0	0	Off 0.89	17	2	 1/0 NaN	 0/1 NaN
+14 Item-14 #14:hand1.gross.(1,0) TRUE On 1.00	3	0	Off 0.88	14	2	 1/0 1.142857	 0/1 0.875000
+15 Item-15 #15:hand2.gross.(1,0)      On NaN	0	0	Off 0.89	17	2	 1/0 NaN	 0/1 NaN
+16 Item-16 #16:hand1.gross.(1,1)      On 1.00	4	0	Off 0.87	13	2	 1/0 1.153846	 0/1 0.866667
+17 Item-17 #17:hand2.gross.(1,1)      On NaN	0	0	Off 0.89	17	2	 1/0 NaN	 0/1 NaN
+
+This schema predicts that when we move HAND_RIGHT, Hand@(0,1) will be OFF.
+This schema of course succeeds almost all the time. 
+Why did system propose it? 
+Should the criteria for "schema succeeds" be that result item is in predicted state, or that it does a transition to predicted state?
+
+
+
+================================================================
+ updateContextItems Schema [Schema 14 []:~[]/[Action-2 HAND1_UP]/null:~Item-4 PRIMITIVE #4:hand1.gross.(-1,1)] succeeded=true
+ item Item-4 PRIMITIVE #4:hand1.gross.(-1,1), onValueReliability: 1.0, offValueReliability: 1.0, on_succeeded: 1, on_failed: 0, off_succeeded: 19, off_failed: 0
+ handleActivation [Schema 14 []:~[]/[Action-2 HAND1_UP]/null:~Item-4 PRIMITIVE #4:hand1.gross.(-1,1)] applicable=true, succeeded=true
+ Activated schema: [Schema 12 []:~[]/[Action-12 GAZE_DOWN]/null:~null]
+
+
+I'm starting with the bare schemas of primitive actions HAND_UP, HAND_DOWN, HAND_LEFT, HAND_RIGHT, as well as some other actions which don't affect anything, like GAZE_RIGHT, NULL_ACTION, HAND_GRASP. 
+
+I've set the sensorimotor system so that the hand moves just to nine discrete positions where  -1 < x < 1, and -1 < y < 1, so it perceives boolean hand location sensory-items like HAND@(0,0) HAND@(-1,1), HAND@(1,0) etc.
+
+
+So for example if you have HAND@(0,0) = true, then all other HAND@(x,y) are false, and if you move the hand with HAND_RIGHT, you get a negative transition on HAND@(0,0), and positive transition on HAND@(1,0). (note, if the hand is at 1,1, and you move it right, it can't move any further, so there is no change in location, and HAND@(1,1) remains on)
+
+After running for a while and taking extended-result statistics on the bare schemas, I see a spinoff schema get created:
+
+/HAND_UP/~HAND@(-1,1)
+
+Which says if I move HAND_UP, then sensory item HAND@(-1,1) turns off, designated as ~HAND@(-1,1). 
+
+~HAND@(-1,1) could happen in the cases where HAND@(-1,1) and the any of the actions HAND_UP, HAND_DOWN, or HAND_RIGHT are taken.
+HAND_LEFT would not cause any change in this case because the hand is at the left extent of it's travel, as we are only letting the hand x and y positions range from -1 to 1 in this experiment.
+
+Once the schema /HAND_UP/~HAND@(-1,1) has been created, then I am getting a problem with the extended context creation.
+
+Because in lots of cases, when this schema executes, it is regarded as having succeeded, because in almost any hand location,
+if you move the hand in any direction, you will find that HAND@(-1,1) is false. Because the criteria for 'success' I am using 
+now for a schema is that after the action is taken, the predicted state of the items in the result set are satisfied. So I'm
+not looking for the result items to make transitions to the predicted values, just that they have in those predicted values after the action is taken.
+
+The current criteria the extended result mechanism is using to define 'success' is threefold:
+
+1) The schema's context is satisfied (always trivially so in this case, because the context is empty)
+
+2) The action is taken
+
+3) The result conditions are satisfied after the action is taken
+
+So in this case I start getting lots of spinoff schemas from the extended-context phase of the form
+
+~HAND@(x,y) / HAND_UP / ~HAND@(-1,1)
+
+I.e., for almost every sensory item in the extended context of HAND_UP/~HAND@(-1,1), that item will be
+OFF when after schemas executes, and the schema pretty much always succeeds, since HAND@(-1,1) is usually false, so we increment the OFF_WHEN_SCHEMA_SUCCEEDS counter
+for those items, and soon the marginal attribution mechanism decides, for most x,y locations, that ~HAND@(x,y) causes this schema to reliably succeed.
+
+So I'm getting a bunch of spurious schemas with context items of the form
+
+~HAND@(0,0) /  HAND_UP / ~HAND@(-1,1)
+~HAND@(1,0) /  HAND_UP / ~HAND@(-1,1)
+~HAND@(1,1) /  HAND_UP / ~HAND@(-1,1)
+...
+
+Should I be doing some other criteria for success, like actually
+checking that the schema's result items actually make a transition to
+predicted values in that timestep, rather than just checking their
+final states match the schema's result set predicted value?
+
+
+
+
+
+================================================================
+
+
+when spinoff context child schema, save the extended context of parent for debugging
+
+- do we have a sign error in spinoff of context OFF items? 
+
+
+
+__________________________
+|       |        |        |
+|       |        |        |
+|(-1,-1)| (0,-1) | (1,-1) |
+|       |        |        |
+|       |        |        |
+|-------+--------+--------|
+|       |        |        |
+|       |        |        |
+|(-1,0) | (0, 0) | (1,0)  |
+|       |        |        |
+|       |        |        |
+|-------+--------+--------|
+|       |        |        |
+|       |        |        |
+|(-1, 1)| (0, 1) | (1, 1) |
+|       |        |        |
+|       |        |        |
+|_______|________|________|
+
+
+
+================
+The system comes up with
+
+/HAND_RIGHT/~HAND@(-1,1)
+
+At that point, every single hand1 position will satisfy that schema, so you get
+one of each
+
+HAND@(x,y)/HAND_RIGHT/~HAND@(-1,1)
+
+These schemas don't hurt anything I guess, but it seems like they aren't very useful. 
+They are good for turning off HAND@(-1,1) I guess. But it seems like there will be a lot of them;
+For all (x,y) , there will be x*y schemas which say how to end up with an  OFF state for hand@(x,y).
+
+
+
+hand1.gross.(0,0)/[Action-0 HAND1_LEFT]/~hand1.gross.(0,1)
+
+
+
+
+__________________________
+|       |        |        |
+|       |right->!|        |
+|(-1,-1)| (0,-1) | (1,-1) |
+|       |        |        |
+|       |        |        |
+|-------+--------+--------|
+|       |        |        |
+|       |        |        |
+|(-1,0) | (0, 0) | (1,0)  |
+|       |        |        |
+|       |        |        |
+|-------+--------+--------|
+|       |        |        |
+|       |        |        |
+|(-1, 1)| (0, 1) | (1, 1) |
+|       |        |        |
+|       |        |        |
+|_______|________|________|
+
+
+
+___________________________
+|       |        |        |
+|       |left->! |        |
+|(-1,-1)| (0,-1) | (1,-1) |
+|       |        |        |
+|       |        |        |
+|-------+--------+--------|
+|       |        |        |
+|       |        |        |
+|(-1,0) | (0, 0) | (1,0)  |
+|       |        |        |
+|       |        |        |
+|-------+--------+--------|
+|       |        |        |
+|       |        |        |
+|(-1, 1)| (0, 1) | (1, 1) |
+|       |        |        |
+|       |        |        |
+|_______|________|________|
+
+================================================================
+
+Section 6.4 Beginnings of the persistent object concept
+
+Important idea: Schema serves as a "host" to a synthetic item
+
+
+Imitation: very important for learning by example
+
+ 4.3.2 Implicit activation and the representation of external actions
+ As noted in section 4. 1 .2, the marginal attribution facility considers a schema to
+ have been implicitly activated if the schema's action is initiated when the schema
+ is applicable, even if that schema was not selected for activation, and thus was not
+ responsible for the action 's initiation. Composite actions carry implicit activation
+ one step further. A composite action is considered to have been implicitly taken
+ whenever its goal state becomes satisfied—that is, makes a transition from Off
+ to On—even if that composite action was never initiated by an activated schema—
+ in fact, even if the goal state's achievement is due to external events entirely
+ uninfluenced by the mechanism. Consequently, a schema whose action is composite
+ is implicitly activated each time its action's goal state becomes satisfied
+ when the schema is applicable. Marginal attribution can thereby detect results
+ caused by the goal state, even if the goal state obtains due to external events.
+ Designating external events as actions combines with activation hysteresis
+ (section 3.4.2) to promote imitation by the schema mechanism of external events
+ that correspond to extant schemas. Hysteresis promotes the activation of a schema
+ that has been activated recently. Hysteresis applies even to implicitly activated
+ schemas, so if a schema is implicitly activated because an external event
+ achieved its action's goal state, the schema's chances for selection for explicit activation
+ are thereby boosted; its explicit activation would then repeat the achievement
+ of that goal state.
+
++ How do you come up with the abstraction "sideways"? 
+As in "move it sideways to make free space" or "move it sideways to get it closer to X".
+ You can push or pull it to get the same result.

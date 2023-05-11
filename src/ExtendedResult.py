@@ -1,299 +1,185 @@
-'''
-package com.beartronics.jschema;
+#Context is a set of items. When a bare schema it created, it's created for every action with empty context
+import logging
+from Bitset import Biteset
+import defaultdict
 
-import gnu.trove.list.TIntList;
-import gnu.trove.list.array.TIntArrayList;
-import gnu.trove.list.TDoubleList;
-import gnu.trove.list.array.TDoubleArrayList;
-
-import java.util.Iterator;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.io.*;
-
-import edu.northwestern.at.utils.math.statistics.FishersExactTest;
-
-import org.apache.log4j.Logger;
-
-// Holds the extended context or result arrays
-public class ExtendedResult {
-
-    static Logger logger = Logger.getLogger(ExtendedResult.class);
-
-    /* Ignore these items when doing marginal attribution */
-    public BitSet ignoreItemsPos = new BitSet();
-    public BitSet ignoreItemsNeg = new BitSet();
-
-    static double P_THRESHOLD = (double) 0.20; //  20% significance for Fisher exact test
-
-    TDoubleArrayList posTransitionActionTaken = new TDoubleArrayList();
-    TDoubleArrayList posTransitionActionNotTaken = new TDoubleArrayList();
-
-    TDoubleArrayList negTransitionActionTaken = new TDoubleArrayList();
-    TDoubleArrayList negTransitionActionNotTaken = new TDoubleArrayList();
-
-    public int numTrialsActionTaken = 0;
-    public int numTrialsActionNotTaken = 0;
-
-    /* need to figure out if these are important
-    TDoubleArrayList remainedOnActionTaken = new TDoubleArrayList();
-    TDoubleArrayList remainedOnActionNotTaken = new TDoubleArrayList();
-
-    TDoubleArrayList remainedOffActionTaken = new TDoubleArrayList();
-    TDoubleArrayList remainedOffActionNotTaken = new TDoubleArrayList();
-    */
-
-    /**
-     * Made Up Minds Section 4.1.2  pp. 73
-     *
-     * @param actionTime the most recent time the action was taken
-     * Update transition statistics with respect to whether the our schema's action was taken or not.
-     */
-    void updateResultItem(Stage stage, Schema schema, Item item, boolean actionTaken, long actionTime) {
-        int id = item.id;
-
-        // Was there a transition since the action was taken?
-        boolean posTransition = item.lastPosTransition >= actionTime;
-        boolean negTransition = item.lastNegTransition >= actionTime;
-        
-        boolean knownState = item.knownState;
-
-        if (posTransition && ignoreItemsPos.get(id)) {
-            // ignore
-        } else if (negTransition && ignoreItemsNeg.get(id)) {
-            // ignore
-        } else {
-
-            // read out the existing statistics on the probablity of result transition with/without the action
-            
-            int positiveTransitionsA = (int) (posTransitionActionTaken.get(id) * stage.xresultRecencyBias);
-            int positiveTransitionsNA = (int) (posTransitionActionNotTaken.get(id)  * stage.xresultRecencyBias);
-
-            int negativeTransitionsA = (int) (negTransitionActionTaken.get(id)  * stage.xresultRecencyBias);
-            int negativeTransitionsNA = (int) (negTransitionActionNotTaken.get(id)  * stage.xresultRecencyBias);
-
-            // Update the item state transition counters 
-
-            // A synthetic item may be in an unknown state, in which case we do not want
-            // to update stats on it. 
-            if (knownState) {
-                if (posTransition && item.predictedPositiveTransition == null) { // 0->1 transition
-                    if (actionTaken) {
-                        positiveTransitionsA++;
-                        logger.debug(String.format("POS-transition-AT %s %s %d", item, schema, positiveTransitionsA));
-                        posTransitionActionTaken.set(id,  positiveTransitionsA);
-                    } else {
-                        positiveTransitionsNA++;
-                        logger.debug(String.format("POS-transition-NAT %s %s %d", item, schema, positiveTransitionsNA));
-                        posTransitionActionNotTaken.set(id, positiveTransitionsNA);
-                    }
-                } else if (negTransition && item.predictedNegativeTransition == null) { // 1->0 transition
-                    if (actionTaken) {
-                        negativeTransitionsA++;
-                        logger.debug(String.format("NEG-transition-AT %s %s %d", item, schema, negativeTransitionsA));
-                        negTransitionActionTaken.set(id, negativeTransitionsA);
-                    } else {
-                        negativeTransitionsNA++;
-                        logger.debug(String.format("NEG-transition-NAT %s %s %d", item, schema, negativeTransitionsNA));
-                        negTransitionActionNotTaken.set(id, negativeTransitionsNA);
-                    }
-                }
-                /* code for taking stats on items which remain in their state, with no transition
-
-                   } else if (val && prevValue) {
-                   if (actionTaken) {
-                   remainedOnActionTaken.set(n, remainedOnActionTaken.get(n) + 1);
-                   } else {
-                   remainedOnActionNotTaken.set(n, remainedOnActionNotTaken.get(n) + 1);
-                   }
-                   } else if (val && prevValue) {
-                   if (actionTaken) {
-                   remainedOnActionTaken.set(n, remainedOnActionTaken.get(n) + 1);
-                   } else {
-                   remainedOnActionNotTaken.set(n, remainedOnActionNotTaken.get(n) + 1);
-                   }
-                   }
-                */
-            }
-            /* TODO [hqm 2014-03] implement this optimization
-               Section 4.1.2
-                "The machinery's sensitivity to relevant results is amplified by an embellishment
-                of marginal attribution: when a given schema is idle (i.e., it has not just completed
-                an activation), the updating of its extended result data is suppressed for any
-                state transition which is explained--meaning that the transition is predicted as the
-                result of a reliable schema whose activation has just completed. Consequently, a
-                given schema whose activation is a less frequent cause of some result needn't
-                compete with other, more frequent causes, once those causes have been identified;
-                in order for the result to be deemed relevant to the given schema, that schema need
-                only bring about the result more often than the result's other unexplained occurrences."
-            */
+#to implement Fisher's test
+import scipy.stats as stats
 
 
+#Holds the extended context or result array
+class ExtendedResult:
+    logger = logging.getLogger(__name__)
+    ignore_items_pos = Bitset()
+    ignore_items_neg = Bitset()
 
-            /** per GLD: "My implementation used an ad hoc method that was tied to its
-                space-limited statistics collection method. But the real way to do it
-                is to use a threshold of statistical significance. So just pre-compute
-                a lookup table that says what the minimum correlation is that can be
-                supported by a given sample size."
-            */
-            double pPos = computePosProbabilities((int) positiveTransitionsNA, (int) positiveTransitionsA,
-                                                  numTrialsActionTaken, numTrialsActionNotTaken);
+    P_THRESHOLD = 0.2 #20% significance for Fisher exact test
 
-            double pNeg = computeNegProbabilities((int) negativeTransitionsNA, (int) negativeTransitionsA,
-                                                  numTrialsActionTaken, numTrialsActionNotTaken);
+    #implementing TDoubleArrayList()
 
-            if (positiveTransitionsA > stage.resultSpinoffMinTrials) {
-                if (pPos < P_THRESHOLD) {
-                    schema.spinoffWithNewResultItem(item, true, pPos, numTrialsActionTaken);
-                }
-            }
-                
-            if (negativeTransitionsA > stage.resultSpinoffMinTrials) {
-                if (pNeg < P_THRESHOLD) {
-                    schema.spinoffWithNewResultItem(item, false, pNeg, numTrialsActionTaken);
-                }
-            }
-        }
-    }
+    pos_transition_action_taken = defaultdict(double)
+    pos_transition_action_not_taken = defaultdict(double)
 
+    neg_transition_action_taken = defaultdict(double)
+    neg_transition_action_not_taken = defaultdict(double)
 
+    num_trials_action_taken = 0
+    num_trials_action_not_taken = 0
 
-            //             no-action  action
-            // transition     n11          n21
-            // no-transition  n12          n22  
+    #need to figure out if these are important
+    # remained_on_action_taken = defaultdict(double)
+    # remained_on_action_not_taken = defaultdict(double)
 
+    # remained_off_action_taken = defaultdict(double)
+    # remained_off_action_not_taken = defaultdict(double)
 
-            //                   (placebo)
-            //                   ACTION NOT TAKEN                          ACTION TAKEN
+    '''
+    Made Up Minds Section 4.1.2  pp. 73
+    
+    @param actionTime the most recent time the action was taken
+    Update transition statistics with respect to whether the our schema's action was taken or not.
+    '''
 
-            // POS TRANSITION    posTransitionsNA                          posTransitionsA
+    def update_result_item(stage, shema, item, action_taken, action_time):
+        id = item.id
 
-            // NO-TRANSITION     (numTrialsActionNotTaken-posTransitionsNA)  (numTrialsActionTaken -posTransitionsA)
+        #Was there a transition since the action was taken?
+        pos_transition = item.last_pos_transition >= action_time
+        neg_transition = item.last_neg_transition >= action_time
 
+        known_state = item.known_state
 
-            /*public static double[] fishersExactTest(int n11,
-                                        int n12,
-                                        int n21,
-                                        int n22)
-                                        Calculate Fisher's exact test from the four cell counts.
-                                        Parameters:
-                                        n11 - Frequency for cell(1,1).
-                                        n12 - Frequency for cell(1,2).
-                                        n21 - Frequency for cell(2,1).
-                                        n22 - Frequency for cell(2,2).
-                                        Returns:
-                                        double vector with three entries. [0] = two-sided Fisher's exact test. [1] = left-tail Fisher's exact test. [2] = right-tail Fisher's exact test.
-            */
+        if pos_transition and ignore_items_pos[id]:
+            #ignore
+            pass
 
-    public double computePosProbabilities(int positiveTransitionsNA, int positiveTransitionsA, int numTrialsActionTaken, int numTrialsActionNotTaken) {
-            int p11 = (int) positiveTransitionsNA;
-            int p21 = (int) numTrialsActionNotTaken - positiveTransitionsNA;
-            int p12 = (int) positiveTransitionsA;
-            int p22 = (int) numTrialsActionTaken - positiveTransitionsA;
+        elif neg_transition and ignore_items_neg[id]:
+            pass #ignore
 
-            double pPos = FishersExactTest.fishersExactTest(p11,p12,p21,p22)[0];
-            return pPos;
-    }
+        else:
+            #read out the existing statistics on the probablity of result transition with/without the action
+            positive_transitions_a = int(pos_transition_action_taken[id] * stage.x_result_recency_bias)
+            positive_transitions_na = int(pos_transition_action_not_taken[id]  * stage.x_result_recency_bias)
 
-    public double computeNegProbabilities(int negativeTransitionsNA, int negativeTransitionsA, int numTrialsActionTaken, int numTrialsActionNotTaken) {
-            int n11 = (int) negativeTransitionsNA;
-            int n21 = (int) numTrialsActionNotTaken - negativeTransitionsNA;
-            int n12 = (int) negativeTransitionsA;
-            int n22 = (int) numTrialsActionTaken - negativeTransitionsA;
+            negative_transitions_a = int(neg_transition_action_taken[id]  * stage.x_result_recency_bias)
+            negative_transitions_na = int(neg_transition_action_not_taken[id]  * stage.x_result_recency_bias)
 
-            double pNeg = FishersExactTest.fishersExactTest(n11,n12,n21,n22)[0];
-            return pNeg;
-    }
+            #Update the item state transition counters 
 
-    public void resetCounters() {
-        resetCounters(negTransitionActionNotTaken);
-        resetCounters(negTransitionActionTaken);
-        resetCounters(posTransitionActionNotTaken);
-        resetCounters(posTransitionActionTaken);
-    }
+            '''
+            A synthetic item may be in an unknown state, in which case we do not want
+            to update stats on it. 
+            '''
 
-    public void resetCounters(TDoubleArrayList a) {
-        for (int i = 0; i < a.size(); i++) {
-            a.set(i, 0);
-        }
-    }
+            if known_state:
+                if pos_transition and not item.predicted_positive_transition: # 0->1 transition
+                    if action_taken:
+                        positive_transitions_a+=1
+                        logger.debug("POS-transition-AT {} {} {}".format(item, schema, positive_transitions_a))
+                        pos_transition_action_taken.set[id] = positive_transitions_a
 
-    public void clearNegativeItems(int itemId) {
-        negTransitionActionNotTaken.set(itemId, 0);
-        negTransitionActionTaken.set(itemId, 0);
-    }
+                    else:
+                        positive_transitions_na+=1
+                        logger.debug("POS-transition-NAT {} {} {}".format(item, schema, positive_transitions_na))
+                        pos_transition_action_not_taken.set[id] = positive_transitions_na
+               
+                elif neg_transition and not item.predicted_negative_transition: # 1->0 transition
+                    if action_taken:
+                        negative_transitions_a+=1
+                        logger.debug("NEG-transition-AT {} {} {}".format(item, schema, negative_transitions_a))
+                        neg_transition_action_taken.set[id] = negative_transitions_a
+                    else:
+                        negative_transitions_na+=1
+                        logger.debug("NEG-transition-NAT {} {} {}".format(item, schema, negative_transitions_na))
+                        negTransitionActionNotTaken.set[id] = negative_transitions_na
+                    
 
-    public void clearPositiveItems(int itemId) {
-        posTransitionActionNotTaken.set(itemId, 0);
-        posTransitionActionTaken.set(itemId, 0);
-    }
+            '''
+            TODO [hqm 2014-03] implement this optimization
+            Section 4.1.2
+            "The machinery's sensitivity to relevant results is amplified by an embellishment
+            of marginal attribution: when a given schema is idle (i.e., it has not just completed
+            an activation), the updating of its extended result data is suppressed for any
+            state transition which is explained--meaning that the transition is predicted as the
+            result of a reliable schema whose activation has just completed. Consequently, a
+            given schema whose activation is a less frequent cause of some result needn't
+            compete with other, more frequent causes, once those causes have been identified;
+            in order for the result to be deemed relevant to the given schema, that schema need
+            only bring about the result more often than the result's other unexplained occurrences."
+            '''
 
-    public String toHTML(Stage stage, Schema schema) {
-        StringWriter s = new StringWriter();
-        PrintWriter p = new PrintWriter(s);
-        
-        ArrayList<Item> items = stage.items;
-        //growArrays(stage.nitems);
-        for (int n = 0; n < items.size(); n++) {
-            Item item = items.get(n);
-            if (item != null) {
+            '''
+            per GLD: "My implementation used an ad hoc method that was tied to its
+            space-limited statistics collection method. But the real way to do it
+            is to use a threshold of statistical significance. So just pre-compute
+            a lookup table that says what the minimum correlation is that can be
+            supported by a given sample size."
 
+            '''
 
-                int positiveTransitionsA = (int) posTransitionActionTaken.get(n);
-                int positiveTransitionsNA = (int) posTransitionActionNotTaken.get(n);
+            pPos = compute_pos_probabilities(int(positive_transitions_na), int(positive_transitions_a),
+                                                  num_trials_action_taken, num_trials_action_not_taken)
 
-                int negativeTransitionsA = (int) negTransitionActionTaken.get(n);
-                int negativeTransitionsNA = (int) negTransitionActionNotTaken.get(n);
+            pNeg = compute_neg_probabilities(int(negative_transitions_na), int(negative_transitions_a),
+                                                  num_trials_action_taken, num_trials_action_not_taken)
 
+            if positive_transitions_a > stage.result_spinoff_min_trials:
+                if pPos < P_THRESHOLD:
+                    schema.result_spinoff_min_trials(item, true, pPos, num_trials_action_taken)
 
-                double pPos = computePosProbabilities(positiveTransitionsNA, positiveTransitionsA, numTrialsActionTaken, numTrialsActionNotTaken);
-                double pNeg = computeNegProbabilities(negativeTransitionsNA, negativeTransitionsA, numTrialsActionTaken, numTrialsActionNotTaken);
+                          
+            if negative_transitions_a > stage.result_spinoff_min_trials:
+                if pNeg < P_THRESHOLD:
+                    schema.result_spinoff_min_trials(item, false, pNeg, num_trials_action_taken)
 
-
-
-                // Compute Chi-squared value  = Sum (o-e)^2 / e
-                p.println(String.format("<tr><td align=left>%d %s "
-                                        +"<td><b>+</b> %.2f <td><span class=\"chart1\" style=\"width: %dpx;\">%d/%d</span> "
-                                        +"<td><span class=\"chart2\" style=\"width: %dpx;\">%d/%d</span>"
-                                        +"<td><b>-</b> %.2f <td><span class=\"chart1\" style=\"width: %dpx;\">%d/%d</span>"
-                                        +"<td><span class=\"chart2\" style=\"width: %dpx;\">%d/%d</span></td></tr>",
-                                        n, item.makeLink(),
-                                        pPos,
-                                        Math.max(10, positiveTransitionsA*4), positiveTransitionsA, numTrialsActionTaken,
-                                        Math.max(10, positiveTransitionsNA*4), positiveTransitionsNA,  numTrialsActionNotTaken,
-                                        pNeg,
-                                        Math.max(10, negativeTransitionsA*4), negativeTransitionsA, numTrialsActionTaken,
-                                        Math.max(10, negativeTransitionsNA*4), negativeTransitionsNA, numTrialsActionNotTaken));
-            }
-        }
-
-        return s.toString();
-    }
+            '''
+                       no-action  action
+            transition     n11          n21
+            no-transition  n12          n22  
 
 
-    /**
-       Makes sure array a can be indexed up to n-1
-     */
-    void growArray(TDoubleArrayList a, int n) {
-        int delta = n - a.size();
-        for (int i = 0; i < delta; i++) {
-            a.add(0);
-        }
-    }
+                              (placebo)
+                            ACTION NOT TAKEN                          ACTION TAKEN
 
-    void growArrays(int n) {
-        growArray(posTransitionActionTaken,n);
-        growArray(posTransitionActionNotTaken,n);
-        growArray(negTransitionActionTaken,n);
-        growArray(negTransitionActionNotTaken,n);
-        /*
-          growArray(remainedOnActionTaken,n);
-          growArray(remainedOnActionNotTaken,n);
-          growArray(remainedOffActionTaken,n);
-          growArray(remainedOffActionNotTaken,n);
-        */
-    }
+            POS TRANSITION    pos_transitions_na                          pos_transitions_a
 
-}
-'''
+            NO-TRANSITION     (num_trials_action_not_taken-pos_transitions_na)  (num_trials_action_taken -pos_transitions_a)
+            '''
+
+    def compute_probabilities(positive_transitions_na, positive_transitions_a, num_trials_action_taken, num_trials_action_not_taken):
+        p11 = int(positive_transitions_na)
+        p21 = int(num_trials_action_not_taken - positive_transitions_na)
+        p12 = int(positive_transitions_a)
+        p22 = int(num_trials_action_taken - positive_transitions_a)
+
+       
+        pPos = stats.fisher_exact([p11, p12], [p21, p22])[0]
+        return pPos
+
+    def compute_neg_probabilities(negative_transitions_na, negative_transitions_a, num_trials_action_taken, num_trials_action_not_taken):
+        n11 = int(negative_transitions_na)
+        n21 = int(num_trials_action_not_taken - negative_transitions_na)
+        n12 = int(negative_transitions_a)
+        n22 = int(num_trials_action_taken - negative_transitions_a)
+
+        pNeg = FishersExactTest.fishersExactTest([n11, n12], [n21, n22])[0]
+        return pNeg
+
+    def reset_counters():
+        neg_transition_action_not_taken = [0] * len(neg_transition_action_not_taken)
+        neg_transition_action_taken = [0] * len(neg_transition_action_taken)
+        pos_transition_action_not_taken = [0] * len(pos_transition_action_not_taken)
+        pos_transition_action_taken = [0] * len(pos_transition_action_taken)
+    
+
+    #implement toHTML function
+
+    def clear_negative_items(item_id):
+        neg_transition_action_not_taken[item_id] = 0
+        neg_transition_action_taken[item_id] = 0
+
+    def creal_positive_items(item_id):
+        pos_transition_action_not_taken[item_id] = 0
+        pos_transition_action_taken[item_id] = 0
+
+
